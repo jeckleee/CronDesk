@@ -133,7 +133,7 @@ impl App {
             .insert(egui::TextStyle::Button, FontId::proportional(14.0));
         ctx.set_style(style);
         let (tx, tray_events) = mpsc::channel();
-        let tray = create_tray(ctx, tx);
+        let tray = create_tray(cc, tx);
         let notice = tray.as_ref().err().map(|e| {
             (
                 format!("托盘不可用：{e}。关闭窗口会退出程序。"),
@@ -956,6 +956,7 @@ impl eframe::App for App {
         self.receive();
         while let Ok(action) = self.tray_events.try_recv() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             if matches!(action, TrayAction::Quit) {
                 self.confirm = Some(Confirm::Quit);
@@ -1124,22 +1125,78 @@ pub fn app_icon() -> egui::IconData {
     }
 }
 
-fn create_tray(ctx: &egui::Context, tx: mpsc::Sender<TrayAction>) -> anyhow::Result<TrayIcon> {
+#[cfg(windows)]
+fn restore_tray_window(hwnd: isize) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        IsIconic, SW_RESTORE, SW_SHOW, SetForegroundWindow, ShowWindow,
+    };
+    // Hidden Windows windows do not repaint. Restore natively before waiting for update().
+    // Tray callbacks run on the UI thread, and the main window outlives the tray.
+    unsafe {
+        let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
+        ShowWindow(
+            hwnd,
+            if IsIconic(hwnd) != 0 {
+                SW_RESTORE
+            } else {
+                SW_SHOW
+            },
+        );
+        SetForegroundWindow(hwnd);
+    }
+}
+
+fn create_tray(
+    cc: &eframe::CreationContext<'_>,
+    tx: mpsc::Sender<TrayAction>,
+) -> anyhow::Result<TrayIcon> {
+    #[cfg(windows)]
+    let hwnd = {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let RawWindowHandle::Win32(handle) = cc.window_handle()?.as_raw() else {
+            anyhow::bail!("无法获取 Windows 主窗口句柄");
+        };
+        handle.hwnd.get()
+    };
+    let context = cc.egui_ctx.clone();
+    let show_window = move || {
+        #[cfg(windows)]
+        restore_tray_window(hwnd);
+        context.request_repaint();
+    };
+    #[cfg(windows)]
+    {
+        let tx = tx.clone();
+        let show_window = show_window.clone();
+        tray_icon::TrayIconEvent::set_event_handler(Some(move |event| {
+            if matches!(
+                event,
+                tray_icon::TrayIconEvent::DoubleClick {
+                    button: tray_icon::MouseButton::Left,
+                    ..
+                }
+            ) {
+                let _ = tx.send(TrayAction::Show);
+                show_window();
+            }
+        }));
+    }
     let menu = Menu::new();
-    let show = MenuItem::new("打开 CronDesk", true, None);
+    let show = MenuItem::new("打开界面", true, None);
     let quit = MenuItem::new("退出 CronDesk", true, None);
     menu.append(&show)?;
     menu.append(&quit)?;
     let show_id = show.id().clone();
     let quit_id = quit.id().clone();
-    let context = ctx.clone();
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
         if event.id == show_id {
             let _ = tx.send(TrayAction::Show);
         } else if event.id == quit_id {
             let _ = tx.send(TrayAction::Quit);
+        } else {
+            return;
         }
-        context.request_repaint();
+        show_window();
     }));
     let mut icon = app_icon();
     if cfg!(target_os = "macos") {
@@ -1155,6 +1212,52 @@ fn create_tray(ctx: &egui::Context, tx: mpsc::Sender<TrayAction>) -> anyhow::Res
         .with_menu(Box::new(menu))
         .with_icon(tray_icon::Icon::from_rgba(icon.rgba, 32, 32)?)
         .with_icon_as_template(cfg!(target_os = "macos"))
-        .with_menu_on_left_click(true)
+        .with_menu_on_left_click(!cfg!(windows))
         .build()?)
+}
+
+#[cfg(all(test, windows))]
+#[test]
+fn tray_restores_native_window_without_a_ui_update() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, IsIconic, IsWindowVisible, IsZoomed, SW_HIDE, SW_MAXIMIZE,
+        SW_MINIMIZE, ShowWindow, WS_OVERLAPPEDWINDOW,
+    };
+    let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+    unsafe {
+        let hwnd = CreateWindowExW(
+            0,
+            class.as_ptr(),
+            class.as_ptr(),
+            WS_OVERLAPPEDWINDOW,
+            0,
+            0,
+            320,
+            240,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null(),
+        );
+        assert!(!hwnd.is_null());
+        assert_eq!(IsWindowVisible(hwnd), 0);
+        // No egui update or repaint runs between hiding and restoring the window.
+        for _ in 0..2 {
+            restore_tray_window(hwnd as isize);
+            assert_ne!(IsWindowVisible(hwnd), 0);
+            assert_eq!(IsIconic(hwnd), 0);
+            ShowWindow(hwnd, SW_MINIMIZE);
+            assert_ne!(IsIconic(hwnd), 0);
+            restore_tray_window(hwnd as isize);
+            assert_ne!(IsWindowVisible(hwnd), 0);
+            assert_eq!(IsIconic(hwnd), 0);
+            ShowWindow(hwnd, SW_MAXIMIZE);
+            ShowWindow(hwnd, SW_HIDE);
+            restore_tray_window(hwnd as isize);
+            assert_ne!(IsWindowVisible(hwnd), 0);
+            assert_ne!(IsZoomed(hwnd), 0);
+            ShowWindow(hwnd, SW_HIDE);
+        }
+        DestroyWindow(hwnd);
+    }
 }

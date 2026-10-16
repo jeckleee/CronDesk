@@ -26,6 +26,8 @@ jobs:
           rustup update stable --no-self-update
           rustup default stable
           rustup target add x86_64-pc-windows-msvc
+      - name: Verify Windows tray window restoration
+        run: cargo test --locked --bin crondesk --target x86_64-pc-windows-msvc
       - name: Build application
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
       - name: Install NSIS

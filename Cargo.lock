@@ -591,7 +591,7 @@ dependencies = [
 
 [[package]]
 name = "crondesk"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -601,6 +601,7 @@ dependencies = [
  "egui_extras",
  "encoding_rs",
  "libc",
+ "raw-window-handle",
  "rfd",
  "rusqlite",
  "tray-icon",
