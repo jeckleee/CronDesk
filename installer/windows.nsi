@@ -11,6 +11,9 @@ Unicode true
 !ifndef OUTPUT_FILE
   !define OUTPUT_FILE "../dist/CronDesk-${VERSION}-windows-x64-setup.exe"
 !endif
+!ifndef ICON_FILE
+  !define ICON_FILE "../assets/CronDesk.ico"
+!endif
 
 Name "CronDesk"
 OutFile "${OUTPUT_FILE}"
@@ -28,6 +31,8 @@ VIAddVersionKey "LegalCopyright" "CronDesk"
 Var AppLock
 
 !define MUI_ABORTWARNING
+!define MUI_ICON "${ICON_FILE}"
+!define MUI_UNICON "${ICON_FILE}"
 !define MUI_WELCOMEPAGE_TEXT "安装或升级 CronDesk ${VERSION}。$\r$\n$\r$\n新版支持一键清空日志，删除任务或服务时同步清理相关日志。升级安装保留现有数据。$\r$\n$\r$\n请先通过系统托盘退出旧版，再继续安装。从 0.1.0 首次升级时会自动备份旧版数据库。"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\CronDesk.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "启动 CronDesk"

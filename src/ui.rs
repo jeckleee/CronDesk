@@ -1141,11 +1141,20 @@ fn create_tray(ctx: &egui::Context, tx: mpsc::Sender<TrayAction>) -> anyhow::Res
         }
         context.request_repaint();
     }));
-    let icon = app_icon();
+    let mut icon = app_icon();
+    if cfg!(target_os = "macos") {
+        // Menu bar templates use only the clock silhouette, with no colored tile.
+        for pixel in icon.rgba.as_chunks_mut::<4>().0 {
+            if pixel[0] != 255 {
+                pixel[3] = 0;
+            }
+        }
+    }
     Ok(TrayIconBuilder::new()
         .with_tooltip("CronDesk · 定时任务与服务")
         .with_menu(Box::new(menu))
         .with_icon(tray_icon::Icon::from_rgba(icon.rgba, 32, 32)?)
+        .with_icon_as_template(cfg!(target_os = "macos"))
         .with_menu_on_left_click(true)
         .build()?)
 }

@@ -6,7 +6,8 @@ version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,
 staging=$(mktemp -d "${TMPDIR:-/tmp}/crondesk-package.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 app="$staging/CronDesk.app"
-mkdir -p "$app/Contents/MacOS" dist
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" dist
+cp assets/CronDesk.icns "$app/Contents/Resources/CronDesk.icns"
 
 lipo -create target/aarch64-apple-darwin/release/crondesk \
   target/x86_64-apple-darwin/release/crondesk \
@@ -23,6 +24,7 @@ Path(sys.argv[1]).write_bytes(plistlib.dumps({
     "CFBundleIdentifier": "com.crondesk.desktop",
     "CFBundleName": "CronDesk",
     "CFBundlePackageType": "APPL",
+    "CFBundleIconFile": "CronDesk.icns",
     "CFBundleShortVersionString": sys.argv[2],
     "CFBundleVersion": sys.argv[2],
     "LSMinimumSystemVersion": "11.0",
