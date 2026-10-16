@@ -1,0 +1,76 @@
+name: Build installers
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+      - name: Build application
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Package installer
+        run: |
+          $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" "/DVERSION=$version" installer/windows.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: CronDesk-windows-x64
+          path: dist/CronDesk-*-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    name: macOS universal installer
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Build application for Apple Silicon and Intel
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+      - name: Package disk image
+        run: bash installer/macos.sh
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: CronDesk-macos-universal
+          path: dist/CronDesk-*-macos-universal.dmg
+          if-no-files-found: error
+          retention-days: 30

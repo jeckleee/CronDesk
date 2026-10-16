@@ -1,0 +1,9 @@
+/target/
+/dist/
+*.sqlite*
+*.lock.tmp
+
+
+.DS_Store
+.env
+.env.*
