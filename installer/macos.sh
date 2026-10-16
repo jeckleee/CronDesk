@@ -11,7 +11,7 @@ mkdir -p "$app/Contents/MacOS" dist
 lipo -create target/aarch64-apple-darwin/release/crondesk \
   target/x86_64-apple-darwin/release/crondesk \
   -output "$app/Contents/MacOS/crondesk"
-lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/crondesk"
+lipo "$app/Contents/MacOS/crondesk" -verify_arch arm64 x86_64
 
 python3 - "$app/Contents/Info.plist" "$version" <<'PY'
 import plistlib
