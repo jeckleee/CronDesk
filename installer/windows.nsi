@@ -5,9 +5,15 @@ Unicode true
 !ifndef VERSION
   !error "Pass /DVERSION=<Cargo package version> to makensis"
 !endif
+!ifndef APP_EXE
+  !define APP_EXE "../target/x86_64-pc-windows-msvc/release/crondesk.exe"
+!endif
+!ifndef OUTPUT_FILE
+  !define OUTPUT_FILE "../dist/CronDesk-${VERSION}-windows-x64-setup.exe"
+!endif
 
 Name "CronDesk"
-OutFile "../dist/CronDesk-${VERSION}-windows-x64-setup.exe"
+OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\CronDesk"
 InstallDirRegKey HKCU "Software\CronDesk" "InstallDir"
 RequestExecutionLevel user
@@ -72,7 +78,7 @@ FunctionEnd
 
 Section "CronDesk" Main
   SetOutPath "$INSTDIR"
-  File /oname=CronDesk.exe "../target/x86_64-pc-windows-msvc/release/crondesk.exe"
+  File /oname=CronDesk.exe "${APP_EXE}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\CronDesk"
   CreateShortcut "$SMPROGRAMS\CronDesk\CronDesk.lnk" "$INSTDIR\CronDesk.exe"
